@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/canonical/jimm/v3/internal/logger"
 	"github.com/juju/loggo"
 	"github.com/juju/zaputil"
 	"github.com/juju/zaputil/zapctx"
@@ -34,17 +35,31 @@ func (s *LoggingSuite) TearDownTest(c *gc.C) {
 }
 
 func (s *LoggingSuite) setUp(c *gc.C) {
-	output := gocheckZapWriter{c}
-	logger := zap.New(zapcore.NewCore(
-		zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
-			LevelKey:    "level",
-			MessageKey:  "msg",
-			EncodeLevel: zapcore.CapitalLevelEncoder,
-			EncodeTime:  zapcore.ISO8601TimeEncoder,
-		}),
-		output,
-		zap.DebugLevel,
-	))
+	// Start here simone and try do this:
+	// start
+	devLogger := logger.NewDevLogger(zap.DebugLevel)
+
+	output := gocheckZapWriter{c, logger}
+
+	devLogger.WithOptions(output)
+
+	zapctx.Default = devLogger
+	//end
+
+	logger := zap.New(
+		zapcore.NewCore(
+			zapcore.NewConsoleEncoder(
+				zapcore.EncoderConfig{
+					LevelKey:    "level",
+					MessageKey:  "msg",
+					EncodeLevel: zapcore.CapitalLevelEncoder,
+					EncodeTime:  zapcore.ISO8601TimeEncoder,
+				},
+			),
+			output,
+			zap.DebugLevel,
+		),
+	)
 
 	zapctx.Default = logger
 
@@ -54,6 +69,7 @@ func (s *LoggingSuite) setUp(c *gc.C) {
 	// replace the default writer.
 	err := loggo.RegisterWriter(loggo.DefaultWriterName, discardWriter{})
 	c.Assert(err, gc.IsNil)
+
 	err = loggo.RegisterWriter("loggingsuite", zaputil.NewLoggoWriter(logger))
 	c.Assert(err, gc.IsNil)
 	level := "DEBUG"

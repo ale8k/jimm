@@ -60,7 +60,7 @@ func TestLogSetup(t *testing.T) {
 					t.Errorf("The code panic")
 				}
 			}()
-			logger.SetupLogger(ctx, tt.logLevel, tt.devMode)
+			logger.SetupDefaultLogger(ctx, tt.logLevel, tt.devMode)
 			zapctx.Info(ctx, "test log")
 		})
 	}

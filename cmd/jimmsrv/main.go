@@ -41,7 +41,8 @@ func main() {
 func start(ctx context.Context, s *service.Service) error {
 	logLevel := os.Getenv("JIMM_LOG_LEVEL")
 	logDevMode, _ := strconv.ParseBool(os.Getenv("JIMM_LOG_DEV_MODE"))
-	logger.SetupLogger(ctx, logLevel, logDevMode)
+
+	logger.SetupDefaultLogger(ctx, logLevel, logDevMode)
 	zapctx.Info(ctx, "jimm info",
 		zap.String("version", version.VersionInfo.Version),
 		zap.String("commit", version.VersionInfo.GitCommit),

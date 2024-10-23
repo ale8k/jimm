@@ -29,6 +29,8 @@ type jujuclientSuite struct {
 func (s *jujuclientSuite) SetUpTest(c *gc.C) {
 	s.JujuSuite.SetUpTest(c)
 
+	c.Log("hi simone")
+
 	s.Dialer = s.JIMM.Dialer
 	var err error
 	info := s.APIInfo(c)
@@ -69,6 +71,8 @@ type dialSuite struct {
 var _ = gc.Suite(&dialSuite{})
 
 func (s *dialSuite) TestDial(c *gc.C) {
+	
+	// c.FailNow()
 	info := s.APIInfo(c)
 	ctl := dbmodel.Controller{
 		UUID:              s.ControllerConfig.ControllerUUID(),
