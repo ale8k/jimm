@@ -128,7 +128,7 @@ func SetupJimmEnv(c *qt.C, opts ...SetupOption) JIMMEnv {
 	}
 
 	if o.useRealAuthN {
-		authSvc := s.realAuthenticationService(c, database)
+		authSvc := s.realAuthenticationService(c, database, o.clientCredentialAudience)
 		deps.OAuthAuthenticator = authSvc
 		deps.MigrationTokenGenerator = authSvc
 
@@ -211,7 +211,7 @@ func jwkSetFromPrivateKeyFile() (jwk.Set, []byte, error) {
 	return ks, testJWKSPrivateKey, nil
 }
 
-func (s *JIMMEnv) realAuthenticationService(c *qt.C, db *db.Database) *auth.AuthenticationService {
+func (s *JIMMEnv) realAuthenticationService(c *qt.C, db *db.Database, clientCredentialAudience string) *auth.AuthenticationService {
 	sqldb, err := db.DB.DB()
 	c.Assert(err, qt.IsNil)
 
@@ -223,17 +223,18 @@ func (s *JIMMEnv) realAuthenticationService(c *qt.C, db *db.Database) *auth.Auth
 
 	// #nosec G101 fixed test secret
 	authSvc, err := auth.NewAuthenticationService(context.Background(), auth.AuthenticationServiceParams{
-		IssuerURL:           "http://localhost:8082/realms/jimm",
-		ClientID:            "jimm-device",
-		ClientSecret:        "SwjDofnbDzJDm9iyfUhEp67FfUFMY8L4",
-		Scopes:              []string{oidc.ScopeOpenID, "profile", "email", "group"},
-		GroupClaimKey:       "groups",
-		SessionTokenExpiry:  time.Hour,
-		Store:               db,
-		SessionStore:        sessionStore,
-		SessionCookieMaxAge: 60,
-		JWTSessionKey:       "test-secret",
-		SecureCookies:       false,
+		IssuerURL:                "http://localhost:8082/realms/jimm",
+		ClientID:                 "jimm-device",
+		ClientSecret:             "SwjDofnbDzJDm9iyfUhEp67FfUFMY8L4",
+		Scopes:                   []string{oidc.ScopeOpenID, "profile", "email", "group"},
+		ClientCredentialAudience: clientCredentialAudience,
+		GroupClaimKey:            "groups",
+		SessionTokenExpiry:       time.Hour,
+		Store:                    db,
+		SessionStore:             sessionStore,
+		SessionCookieMaxAge:      60,
+		JWTSessionKey:            "test-secret",
+		SecureCookies:            false,
 	})
 	c.Assert(err, qt.IsNil)
 	return authSvc

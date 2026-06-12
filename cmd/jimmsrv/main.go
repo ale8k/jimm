@@ -118,6 +118,8 @@ func start(ctx context.Context, s *service.Service) error {
 	clientCredentialScopes := os.Getenv("JIMM_OAUTH_CLIENT_CREDENTIAL_SCOPES")
 	clientCredentialScopesParsed := strings.Fields(clientCredentialScopes)
 	zapctx.Info(ctx, "oauth client credential scopes", zap.Any("scopes", clientCredentialScopesParsed))
+	clientCredentialAudience := os.Getenv("JIMM_OAUTH_CLIENT_CREDENTIAL_AUDIENCE")
+	zapctx.Info(ctx, "oauth client credential audience", zap.String("audience", clientCredentialAudience))
 
 	groupClaimKey := os.Getenv("JIMM_OAUTH_GROUP_CLAIM_KEY")
 
@@ -231,17 +233,18 @@ func start(ctx context.Context, s *service.Service) error {
 		JWKSPrivateKeyPath:            jwksPrivateKeyPath,
 		InsecureSecretStorage:         insecureSecretStorage,
 		OAuthAuthenticatorParams: jimmsvc.OAuthAuthenticatorParams{
-			IssuerURL:              issuerURL,
-			ClientID:               clientID,
-			ClientSecret:           clientSecret,
-			Scopes:                 scopesParsed,
-			ClientCredentialScopes: clientCredentialScopesParsed,
-			GroupClaimKey:          groupClaimKey,
-			SessionTokenExpiry:     sessionTokenExpiryDuration,
-			SessionCookieMaxAge:    sessionCookieMaxAgeInt,
-			JWTSessionKey:          sessionSecretKey,
-			SecureSessionCookies:   secureSessionCookies,
-			AuthStyle:              os.Getenv("JIMM_OAUTH_AUTH_STYLE"),
+			IssuerURL:                issuerURL,
+			ClientID:                 clientID,
+			ClientSecret:             clientSecret,
+			Scopes:                   scopesParsed,
+			ClientCredentialScopes:   clientCredentialScopesParsed,
+			ClientCredentialAudience: clientCredentialAudience,
+			GroupClaimKey:            groupClaimKey,
+			SessionTokenExpiry:       sessionTokenExpiryDuration,
+			SessionCookieMaxAge:      sessionCookieMaxAgeInt,
+			JWTSessionKey:            sessionSecretKey,
+			SecureSessionCookies:     secureSessionCookies,
+			AuthStyle:                os.Getenv("JIMM_OAUTH_AUTH_STYLE"),
 		},
 		DashboardFinalRedirectURL: os.Getenv("JIMM_DASHBOARD_FINAL_REDIRECT_URL"),
 		CookieSessionKey:          []byte(sessionSecretKey),

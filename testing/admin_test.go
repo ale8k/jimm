@@ -351,27 +351,49 @@ func TestLoginWithClientCredentials(t *testing.T) {
 	}, "test@canonical.com", nil)
 	defer conn.Close()
 
-	const (
-		// these are valid client credentials hardcoded into the jimm realm
-		validClientID = "test-client-id"
-		//nolint:gosec // Thinks credentials hardcoded.
-		validClientSecret = "2M2blFbO4GX4zfggQpivQSxwWX1XGgNf"
-	)
-
 	var loginResult jujuparams.LoginResult
 	err := conn.APICall("Admin", 4, "", "LoginWithClientCredentials", params.LoginWithClientCredentialsRequest{
-		ClientID:     validClientID,
-		ClientSecret: validClientSecret,
+		ClientID:     jimmtest.HardcodedServiceAccountClientID,
+		ClientSecret: jimmtest.HardcodedServiceAccountClientSecret,
 	}, &loginResult)
 	c.Assert(err, qt.IsNil)
 	c.Assert(loginResult.ControllerTag, qt.Equals, names.NewControllerTag(s.Params.ControllerUUID).String())
-	c.Assert(loginResult.UserInfo.Identity, qt.Equals, names.NewUserTag("test-client-id@serviceaccount").String())
+	c.Assert(loginResult.UserInfo.Identity, qt.Equals, names.NewUserTag(jimmtest.HardcodedServiceAccountClientID+"@serviceaccount").String())
+
+	err = conn.APICall("Admin", 4, "", "LoginWithClientCredentials", params.LoginWithClientCredentialsRequest{
+		ClientID:     jimmtest.HardcodedServiceAccountWithGroupsClientID,
+		ClientSecret: jimmtest.HardcodedServiceAccountWithGroupsClientSecret,
+	}, &loginResult)
+	c.Assert(err, qt.IsNil)
+	c.Assert(loginResult.ControllerTag, qt.Equals, names.NewControllerTag(s.Params.ControllerUUID).String())
+	c.Assert(loginResult.UserInfo.Identity, qt.Equals, names.NewUserTag(jimmtest.HardcodedServiceAccountWithGroupsClientID+"@serviceaccount").String())
 
 	err = conn.APICall("Admin", 4, "", "LoginWithClientCredentials", params.LoginWithClientCredentialsRequest{
 		ClientID:     "invalid-client-id",
 		ClientSecret: "invalid-secret",
 	}, &loginResult)
 	c.Assert(err, qt.ErrorMatches, `invalid client credentials: oauth2: "invalid_client" "Invalid client or Invalid client credentials" \(unauthorized access\)`)
+}
+
+func TestLoginWithClientCredentialsAudienceMismatch(t *testing.T) {
+	c := qt.New(t)
+	s := jimmtest.SetupJimmWithControllers(
+		c,
+		jimmtest.WithRealAuthN(),
+		jimmtest.WithClientCredentialAudience("jimm-audience-that-does-not-exist"),
+	)
+
+	conn := s.Open(c, &api.Info{
+		SkipLogin: true,
+	}, "test@canonical.com", nil)
+	defer conn.Close()
+
+	var loginResult jujuparams.LoginResult
+	err := conn.APICall("Admin", 4, "", "LoginWithClientCredentials", params.LoginWithClientCredentialsRequest{
+		ClientID:     jimmtest.HardcodedServiceAccountClientID,
+		ClientSecret: jimmtest.HardcodedServiceAccountClientSecret,
+	}, &loginResult)
+	c.Assert(err, qt.ErrorMatches, `invalid client credentials token claims: .* \(unauthorized access\)`)
 }
 
 // getDialWebsocketWithCustomCookieJar is mostly the default dialer configuration exception

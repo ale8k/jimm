@@ -102,6 +102,11 @@ type AuthenticationService struct {
 	oauthConfig oauth2.Config
 	// clientCredentialScopes holds scopes used only for client-credentials flow.
 	clientCredentialScopes []string
+	// clientCredentialAudience is the expected audience in client-credentials
+	// access tokens.
+	clientCredentialAudience string
+	// issuerURL is the expected issuer in OAuth access tokens.
+	issuerURL string
 	// provider holds a OIDC provider wrapper for the OAuth2.0 /x/oauth package,
 	// enabling UserInfo calls, wellknown retrieval and jwks verification.
 	provider *oidc.Provider
@@ -154,6 +159,10 @@ type AuthenticationServiceParams struct {
 	// ClientCredentialScopes holds scopes requested for client-credentials flow.
 	ClientCredentialScopes []string
 
+	// ClientCredentialAudience holds the expected audience for
+	// client-credentials access tokens.
+	ClientCredentialAudience string
+
 	// GroupClaimKey is the provider-specific claim name that contains group
 	// identifiers.
 	GroupClaimKey string
@@ -204,7 +213,8 @@ func NewAuthenticationService(ctx context.Context, params AuthenticationServiceP
 	}
 
 	authSvc := &AuthenticationService{
-		provider: provider,
+		provider:  provider,
+		issuerURL: params.IssuerURL,
 		oauthConfig: oauth2.Config{
 			ClientID:     params.ClientID,
 			ClientSecret: params.ClientSecret,
@@ -212,15 +222,16 @@ func NewAuthenticationService(ctx context.Context, params AuthenticationServiceP
 			Scopes:       params.Scopes,
 			RedirectURL:  params.RedirectURL,
 		},
-		clientCredentialScopes: params.ClientCredentialScopes,
-		sessionTokenExpiry:     params.SessionTokenExpiry,
-		jwtSessionKey:          params.JWTSessionKey,
-		signingAlg:             jwa.HS256,
-		groupClaimKey:          params.GroupClaimKey,
-		db:                     params.Store,
-		sessionStore:           params.SessionStore,
-		sessionCookieMaxAge:    params.SessionCookieMaxAge,
-		secureCookies:          params.SecureCookies,
+		clientCredentialScopes:   params.ClientCredentialScopes,
+		clientCredentialAudience: params.ClientCredentialAudience,
+		sessionTokenExpiry:       params.SessionTokenExpiry,
+		jwtSessionKey:            params.JWTSessionKey,
+		signingAlg:               jwa.HS256,
+		groupClaimKey:            params.GroupClaimKey,
+		db:                       params.Store,
+		sessionStore:             params.SessionStore,
+		sessionCookieMaxAge:      params.SessionCookieMaxAge,
+		secureCookies:            params.SecureCookies,
 	}
 
 	// If the auth style is specifically defined, then use that to avoid
@@ -254,21 +265,110 @@ func splitGroupClaimString(value string) []string {
 	return strings.Fields(normalised)
 }
 
-// extractGroupsFromAccessToken extracts the configured groups claim from an access token.
-// The access token is parsed as a JWT without signature verification because it
-// originates from the provider token endpoint and we only need claim extraction.
-func (as *AuthenticationService) extractGroupsFromAccessToken(ctx context.Context, accessToken *oauth2.Token) ([]string, error) {
+func parseAccessToken(accessToken *oauth2.Token) (jwt.Token, error) {
 	if accessToken == nil || accessToken.AccessToken == "" {
 		return nil, errors.New("access token is empty")
-	}
-
-	if as.groupClaimKey == "" {
-		return nil, nil
 	}
 
 	parsedToken, err := jwt.ParseInsecure([]byte(accessToken.AccessToken))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse access token: %v", err)
+	}
+
+	return parsedToken, nil
+}
+
+func isExpectedAudience(rawAudience any, expectedAudience string) (bool, error) {
+	switch audience := rawAudience.(type) {
+	case string:
+		return audience == expectedAudience, nil
+	case []string:
+		for _, aud := range audience {
+			if aud == expectedAudience {
+				return true, nil
+			}
+		}
+		return false, nil
+	case []any:
+		for i, aud := range audience {
+			audStr, ok := aud.(string)
+			if !ok {
+				return false, fmt.Errorf("invalid audience claim entry type at index %d: got %T", i, aud)
+			}
+			if audStr == expectedAudience {
+				return true, nil
+			}
+		}
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid audience claim type: got %T", rawAudience)
+	}
+}
+
+func (as *AuthenticationService) validateClientCredentialsAccessToken(parsedToken jwt.Token, clientID string) error {
+	if parsedToken == nil {
+		return errors.New("token is nil")
+	}
+
+	issuerClaim, ok := parsedToken.Get("iss")
+	if !ok {
+		return errors.New("missing issuer claim")
+	}
+	issuer, ok := issuerClaim.(string)
+	if !ok {
+		return fmt.Errorf("issuer claim is not a string: got %T", issuerClaim)
+	}
+	if issuer != as.issuerURL {
+		return fmt.Errorf("invalid issuer claim: got %q expected %q", issuer, as.issuerURL)
+	}
+
+	if as.clientCredentialAudience != "" {
+		rawAudience, ok := parsedToken.Get("aud")
+		if !ok {
+			return errors.New("missing audience claim")
+		}
+
+		hasExpectedAudience, err := isExpectedAudience(rawAudience, as.clientCredentialAudience)
+		if err != nil {
+			return err
+		}
+		if !hasExpectedAudience {
+			return fmt.Errorf("audience claim does not contain expected audience %q", as.clientCredentialAudience)
+		}
+	}
+
+	if authorizedParty, ok := parsedToken.Get("azp"); ok {
+		authorizedPartyStr, ok := authorizedParty.(string)
+		if !ok {
+			return fmt.Errorf("azp claim is not a string: got %T", authorizedParty)
+		}
+		if authorizedPartyStr != clientID {
+			return fmt.Errorf("azp claim does not match client id: got %q expected %q", authorizedPartyStr, clientID)
+		}
+		return nil
+	}
+
+	if clientIDClaim, ok := parsedToken.Get("client_id"); ok {
+		clientIDClaimStr, ok := clientIDClaim.(string)
+		if !ok {
+			return fmt.Errorf("client_id claim is not a string: got %T", clientIDClaim)
+		}
+		if clientIDClaimStr != clientID {
+			return fmt.Errorf("client_id claim does not match client id: got %q expected %q", clientIDClaimStr, clientID)
+		}
+		return nil
+	}
+
+	return errors.New("missing authorized party claim: expected azp or client_id")
+}
+
+func (as *AuthenticationService) extractGroupsFromParsedAccessToken(ctx context.Context, parsedToken jwt.Token) ([]string, error) {
+	if parsedToken == nil {
+		return nil, errors.New("token is nil")
+	}
+
+	if as.groupClaimKey == "" {
+		return nil, nil
 	}
 
 	groupClaim, ok := parsedToken.Get(as.groupClaimKey)
@@ -296,6 +396,18 @@ func (as *AuthenticationService) extractGroupsFromAccessToken(ctx context.Contex
 	default:
 		return nil, fmt.Errorf("invalid group claim type: got %T", groupClaim)
 	}
+}
+
+// extractGroupsFromAccessToken extracts the configured groups claim from an access token.
+// The access token is parsed as a JWT without signature verification because it
+// originates from the provider token endpoint and we only need claim extraction.
+func (as *AuthenticationService) extractGroupsFromAccessToken(ctx context.Context, accessToken *oauth2.Token) ([]string, error) {
+	parsedToken, err := parseAccessToken(accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return as.extractGroupsFromParsedAccessToken(ctx, parsedToken)
 }
 
 // AuthCodeURL returns a URL that will be used to redirect a browser to the identity provider.
@@ -627,8 +739,19 @@ func (as *AuthenticationService) VerifyClientCredentials(ctx context.Context, cl
 		return nil, errors.Codef(errors.CodeUnauthorized, "invalid client credentials: %v", err)
 	}
 
+	parsedToken, err := parseAccessToken(accessToken)
+	if err != nil {
+		servermon.AuthenticationFailCount.WithLabelValues("VerifyClientCredentials").Inc()
+		return nil, errors.Codef(errors.CodeUnauthorized, "invalid client credentials token: %v", err)
+	}
+
+	if err := as.validateClientCredentialsAccessToken(parsedToken, clientID); err != nil {
+		servermon.AuthenticationFailCount.WithLabelValues("VerifyClientCredentials").Inc()
+		return nil, errors.Codef(errors.CodeUnauthorized, "invalid client credentials token claims: %v", err)
+	}
+
 	// Extract groups from the access token
-	groups, err := as.extractGroupsFromAccessToken(ctx, accessToken)
+	groups, err := as.extractGroupsFromParsedAccessToken(ctx, parsedToken)
 	if err != nil {
 		servermon.AuthenticationFailCount.WithLabelValues("VerifyClientCredentials").Inc()
 		return nil, fmt.Errorf("failed to extract groups from access token: %v", err)

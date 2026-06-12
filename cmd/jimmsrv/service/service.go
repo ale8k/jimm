@@ -80,6 +80,9 @@ type OAuthAuthenticatorParams struct {
 	ClientID string
 
 	// ClientSecret holds the OAuth2.0 "client-secret" to authenticate when performing
+	// ClientCredentialAudience holds the expected audience in
+	// client-credentials access tokens.
+	ClientCredentialAudience string
 	// /auth and /token requests.
 	ClientSecret string
 
@@ -520,20 +523,21 @@ func NewServiceDependencies(ctx context.Context, p Params) (*ServiceDependencies
 	authSvc, err := auth.NewAuthenticationService(
 		ctx,
 		auth.AuthenticationServiceParams{
-			IssuerURL:              p.OAuthAuthenticatorParams.IssuerURL,
-			ClientID:               p.OAuthAuthenticatorParams.ClientID,
-			ClientSecret:           p.OAuthAuthenticatorParams.ClientSecret,
-			Scopes:                 p.OAuthAuthenticatorParams.Scopes,
-			ClientCredentialScopes: p.OAuthAuthenticatorParams.ClientCredentialScopes,
-			GroupClaimKey:          p.OAuthAuthenticatorParams.GroupClaimKey,
-			SessionTokenExpiry:     p.OAuthAuthenticatorParams.SessionTokenExpiry,
-			SessionCookieMaxAge:    p.OAuthAuthenticatorParams.SessionCookieMaxAge,
-			JWTSessionKey:          p.OAuthAuthenticatorParams.JWTSessionKey,
-			SecureCookies:          p.OAuthAuthenticatorParams.SecureSessionCookies,
-			AuthStyle:              auth.AuthStyle(p.OAuthAuthenticatorParams.AuthStyle),
-			Store:                  db,
-			SessionStore:           sessionStore,
-			RedirectURL:            redirectUrl,
+			IssuerURL:                p.OAuthAuthenticatorParams.IssuerURL,
+			ClientID:                 p.OAuthAuthenticatorParams.ClientID,
+			ClientSecret:             p.OAuthAuthenticatorParams.ClientSecret,
+			Scopes:                   p.OAuthAuthenticatorParams.Scopes,
+			ClientCredentialScopes:   p.OAuthAuthenticatorParams.ClientCredentialScopes,
+			ClientCredentialAudience: p.OAuthAuthenticatorParams.ClientCredentialAudience,
+			GroupClaimKey:            p.OAuthAuthenticatorParams.GroupClaimKey,
+			SessionTokenExpiry:       p.OAuthAuthenticatorParams.SessionTokenExpiry,
+			SessionCookieMaxAge:      p.OAuthAuthenticatorParams.SessionCookieMaxAge,
+			JWTSessionKey:            p.OAuthAuthenticatorParams.JWTSessionKey,
+			SecureCookies:            p.OAuthAuthenticatorParams.SecureSessionCookies,
+			AuthStyle:                auth.AuthStyle(p.OAuthAuthenticatorParams.AuthStyle),
+			Store:                    db,
+			SessionStore:             sessionStore,
+			RedirectURL:              redirectUrl,
 		},
 	)
 	if err != nil {

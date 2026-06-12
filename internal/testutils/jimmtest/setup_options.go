@@ -11,7 +11,8 @@ type SetupOption func(*SetupOptions)
 //
 // Fields are unexported; callers should use the With* helpers.
 type SetupOptions struct {
-	useRealAuthN bool
+	useRealAuthN             bool
+	clientCredentialAudience string
 }
 
 func applySetupOptions(opts []SetupOption) SetupOptions {
@@ -30,5 +31,13 @@ func applySetupOptions(opts []SetupOption) SetupOptions {
 func WithRealAuthN() SetupOption {
 	return func(o *SetupOptions) {
 		o.useRealAuthN = true
+	}
+}
+
+// WithClientCredentialAudience configures the expected audience for
+// client-credentials access tokens in real-auth test environments.
+func WithClientCredentialAudience(audience string) SetupOption {
+	return func(o *SetupOptions) {
+		o.clientCredentialAudience = audience
 	}
 }

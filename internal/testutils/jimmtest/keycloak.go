@@ -22,4 +22,15 @@ const (
 	// OIDCGroupsTestGroupName is the group used by real Keycloak-backed tests
 	// that verify OIDC group claim extraction.
 	OIDCGroupsTestGroupName = "canonical"
+
+	// HardcodedServiceAccountClientID and HardcodedServiceAccountClientSecret
+	// are valid Keycloak service-account credentials for local tests.
+	HardcodedServiceAccountClientID     = "test-client-id"
+	HardcodedServiceAccountClientSecret = "2M2blFbO4GX4zfggQpivQSxwWX1XGgNf"
+
+	// HardcodedServiceAccountWithGroupsClientID and
+	// HardcodedServiceAccountWithGroupsClientSecret are valid Keycloak
+	// service-account credentials for a client with seeded groups.
+	HardcodedServiceAccountWithGroupsClientID     = "test-client-id-with-groups"
+	HardcodedServiceAccountWithGroupsClientSecret = "d6JVj6NDXYx56muG6ZmjWMLcJnIYQjD0"
 )
